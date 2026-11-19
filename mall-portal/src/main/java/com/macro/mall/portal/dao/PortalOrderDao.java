@@ -45,4 +45,12 @@ public interface PortalOrderDao {
      */
     int lockStock(@Param("skuId") Long skuId, @Param("quantity") Integer quantity);
 
+    /**
+     * 原子抢占支付处理权：仅当订单仍为待付款(status=0)时才更新为已支付。
+     * 判断与写入在一条 UPDATE 中由数据库行锁保证原子性，用于支付回调幂等。
+     *
+     * @return 影响行数，1 表示抢到处理权，0 表示订单已被处理（重复回调）
+     */
+    int paySuccess(@Param("orderId") Long orderId, @Param("payType") Integer payType);
+
 }

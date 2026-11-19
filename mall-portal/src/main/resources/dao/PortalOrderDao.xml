@@ -96,4 +96,14 @@
         WHERE id = #{skuId}
           AND stock - lock_stock &gt;= #{quantity}
     </update>
+
+    <!-- 原子抢占支付处理权：status=0 才更新，重复回调时条件不满足、影响行数为0 -->
+    <update id="paySuccess">
+        UPDATE oms_order
+        SET status = 1,
+            payment_time = NOW(),
+            pay_type = #{payType}
+        WHERE id = #{orderId}
+          AND status = 0
+    </update>
 </mapper>

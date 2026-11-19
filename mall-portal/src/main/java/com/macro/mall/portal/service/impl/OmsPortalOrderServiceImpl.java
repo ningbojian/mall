@@ -254,13 +254,12 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
     @Override
     @Transactional
     public Integer paySuccess(Long orderId, Integer payType) {
-        //修改订单支付状态
-        OmsOrder order = new OmsOrder();
-        order.setId(orderId);
-        order.setStatus(1);
-        order.setPaymentTime(new Date());
-        order.setPayType(payType);
-        orderMapper.updateByPrimaryKeySelective(order);
+        // 原子抢占支付处理权：仅当 status=0 时才更新为已支付。
+        // 影响行数为 0 表示订单已被处理（重复回调），直接返回，避免重复扣库存。
+        int updated = portalOrderDao.paySuccess(orderId, payType);
+        if (updated == 0) {
+            return 0;
+        }
         //恢复所有下单商品的锁定库存，扣减真实库存
         OmsOrderDetail orderDetail = portalOrderDao.getDetail(orderId);
         int count = portalOrderDao.updateSkuStock(orderDetail.getOrderItemList());
