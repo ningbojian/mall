@@ -736,12 +736,17 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
 
     /**
      * 锁定下单商品的所有库存
+     * 采用原子条件更新：判断可售库存与增加锁定库存由一条 UPDATE 完成，
+     * 由数据库行锁保证原子性，避免并发下的超卖问题。
      */
     private void lockStock(List<CartPromotionItem> cartPromotionItemList) {
         for (CartPromotionItem cartPromotionItem : cartPromotionItemList) {
-            PmsSkuStock skuStock = skuStockMapper.selectByPrimaryKey(cartPromotionItem.getProductSkuId());
-            skuStock.setLockStock(skuStock.getLockStock() + cartPromotionItem.getQuantity());
-            skuStockMapper.updateByPrimaryKeySelective(skuStock);
+            int rows = portalOrderDao.lockStock(
+                    cartPromotionItem.getProductSkuId(), cartPromotionItem.getQuantity());
+            if (rows == 0) {
+                // 影响行数为 0 表示可售库存不足，抛出异常触发整体事务回滚
+                Asserts.fail("库存不足，无法下单");
+            }
         }
     }
 

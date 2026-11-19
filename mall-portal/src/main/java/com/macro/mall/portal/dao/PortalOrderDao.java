@@ -37,4 +37,12 @@ public interface PortalOrderDao {
      */
     int releaseSkuStockLock(@Param("itemList") List<OmsOrderItem> orderItemList);
 
+    /**
+     * 原子锁定库存：仅当可售库存(stock - lock_stock)充足时才增加锁定库存。
+     * 判断与写入在一条 UPDATE 中由数据库行锁保证原子性，避免超卖。
+     *
+     * @return 影响行数，0 表示库存不足（锁定失败）
+     */
+    int lockStock(@Param("skuId") Long skuId, @Param("quantity") Integer quantity);
+
 }
