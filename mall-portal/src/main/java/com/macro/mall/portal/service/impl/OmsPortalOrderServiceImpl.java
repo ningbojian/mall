@@ -299,55 +299,40 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
         if (CollectionUtils.isEmpty(timeOutOrders)) {
             return count;
         }
-        //修改订单状态为交易取消
-        List<Long> ids = new ArrayList<>();
+        //逐笔走 cancelOrder 的原子幂等门：与 MQ 消费者共用同一道门，
+        //已被 MQ 取消或已支付的订单在门处影响行数为 0，不会重复释放库存/退券/退积分。
         for (OmsOrderDetail timeOutOrder : timeOutOrders) {
-            ids.add(timeOutOrder.getId());
+            cancelOrder(timeOutOrder.getId());
+            count++;
         }
-        portalOrderDao.updateOrderStatus(ids, 4);
-        for (OmsOrderDetail timeOutOrder : timeOutOrders) {
-            //解除订单商品库存锁定
-            portalOrderDao.releaseSkuStockLock(timeOutOrder.getOrderItemList());
-            //修改优惠券使用状态
-            updateCouponStatus(timeOutOrder.getCouponId(), timeOutOrder.getMemberId(), 0);
-            //返还使用积分
-            if (timeOutOrder.getUseIntegration() != null) {
-                UmsMember member = memberService.getById(timeOutOrder.getMemberId());
-                memberService.updateIntegration(timeOutOrder.getMemberId(), member.getIntegration() + timeOutOrder.getUseIntegration());
-            }
-        }
-        return timeOutOrders.size();
+        return count;
     }
 
     @Override
     @Transactional
     public void cancelOrder(Long orderId) {
-        //查询未付款的取消订单
-        OmsOrderExample example = new OmsOrderExample();
-        example.createCriteria().andIdEqualTo(orderId).andStatusEqualTo(0).andDeleteStatusEqualTo(0);
-        List<OmsOrder> cancelOrderList = orderMapper.selectByExample(example);
-        if (CollectionUtils.isEmpty(cancelOrderList)) {
+        //原子抢占取消处理权：仅当 status=0 且未删除才改为取消(status=4)。
+        //判断与写入合为一条 UPDATE，MQ 消费者与定时器共用这道幂等门，
+        //重复消息/已被取消/已支付的订单影响行数为 0，直接跳过所有配套操作。
+        int rows = portalOrderDao.cancelOrder(orderId);
+        if (rows == 0) {
             return;
         }
-        OmsOrder cancelOrder = cancelOrderList.get(0);
-        if (cancelOrder != null) {
-            //修改订单状态为取消
-            cancelOrder.setStatus(4);
-            orderMapper.updateByPrimaryKeySelective(cancelOrder);
-            OmsOrderItemExample orderItemExample = new OmsOrderItemExample();
-            orderItemExample.createCriteria().andOrderIdEqualTo(orderId);
-            List<OmsOrderItem> orderItemList = orderItemMapper.selectByExample(orderItemExample);
-            //解除订单商品库存锁定
-            if (!CollectionUtils.isEmpty(orderItemList)) {
-                portalOrderDao.releaseSkuStockLock(orderItemList);
-            }
-            //修改优惠券使用状态
-            updateCouponStatus(cancelOrder.getCouponId(), cancelOrder.getMemberId(), 0);
-            //返还使用积分
-            if (cancelOrder.getUseIntegration() != null) {
-                UmsMember member = memberService.getById(cancelOrder.getMemberId());
-                memberService.updateIntegration(cancelOrder.getMemberId(), member.getIntegration() + cancelOrder.getUseIntegration());
-            }
+        //抢到处理权后，查询订单详情执行配套操作
+        OmsOrder cancelOrder = orderMapper.selectByPrimaryKey(orderId);
+        OmsOrderItemExample orderItemExample = new OmsOrderItemExample();
+        orderItemExample.createCriteria().andOrderIdEqualTo(orderId);
+        List<OmsOrderItem> orderItemList = orderItemMapper.selectByExample(orderItemExample);
+        //解除订单商品库存锁定
+        if (!CollectionUtils.isEmpty(orderItemList)) {
+            portalOrderDao.releaseSkuStockLock(orderItemList);
+        }
+        //修改优惠券使用状态
+        updateCouponStatus(cancelOrder.getCouponId(), cancelOrder.getMemberId(), 0);
+        //返还使用积分
+        if (cancelOrder.getUseIntegration() != null) {
+            UmsMember member = memberService.getById(cancelOrder.getMemberId());
+            memberService.updateIntegration(cancelOrder.getMemberId(), member.getIntegration() + cancelOrder.getUseIntegration());
         }
     }
 

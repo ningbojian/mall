@@ -53,4 +53,12 @@ public interface PortalOrderDao {
      */
     int paySuccess(@Param("orderId") Long orderId, @Param("payType") Integer payType);
 
+    /**
+     * 原子抢占单笔取消处理权：仅当订单仍为待付款(status=0且未删除)时才改为取消(status=4)。
+     * 判断与写入在一条 UPDATE 中由数据库行锁保证原子性，供 MQ 消费者与定时器共用同一道幂等门。
+     *
+     * @return 影响行数，1 表示抢到处理权，0 表示订单已被取消/支付（重复消息）
+     */
+    int cancelOrder(@Param("orderId") Long orderId);
+
 }

@@ -106,4 +106,13 @@
         WHERE id = #{orderId}
           AND status = 0
     </update>
+
+    <!-- 原子抢占单笔取消处理权：status=0 才更新，重复消息/已支付时影响行数为0 -->
+    <update id="cancelOrder">
+        UPDATE oms_order
+        SET status = 4
+        WHERE id = #{orderId}
+          AND status = 0
+          AND delete_status = 0
+    </update>
 </mapper>
