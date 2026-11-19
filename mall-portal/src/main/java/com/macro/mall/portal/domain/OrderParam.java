@@ -23,4 +23,6 @@ public class OrderParam {
     private Integer payType;
     @Schema(title = "被选中的购物车商品ID")
     private List<Long> cartIds;
+    @Schema(title = "下单幂等令牌，下单前从 /order/token 领取")
+    private String token;
 }

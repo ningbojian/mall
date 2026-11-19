@@ -29,6 +29,14 @@ public class OmsPortalOrderController {
     @Autowired
     private OmsPortalOrderService portalOrderService;
 
+    @Operation(summary = "领取下单幂等令牌（下单前先调用，下单时携带返回的token）")
+    @RequestMapping(value = "/token", method = RequestMethod.GET)
+    @ResponseBody
+    public CommonResult<String> generateOrderToken() {
+        String token = portalOrderService.generateOrderToken();
+        return CommonResult.success(token);
+    }
+
     @Operation(summary = "根据购物车信息生成确认单")
     @RequestMapping(value = "/generateConfirmOrder", method = RequestMethod.POST)
     @ResponseBody

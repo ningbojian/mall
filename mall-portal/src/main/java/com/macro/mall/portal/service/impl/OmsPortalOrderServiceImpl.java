@@ -58,6 +58,10 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
     private String REDIS_KEY_ORDER_ID;
     @Value("${redis.database}")
     private String REDIS_DATABASE;
+    @Value("${redis.key.orderToken}")
+    private String REDIS_KEY_ORDER_TOKEN;
+    @Value("${redis.expire.orderToken}")
+    private long REDIS_EXPIRE_ORDER_TOKEN;
     @Autowired
     private PortalOrderDao portalOrderDao;
     @Autowired
@@ -66,6 +70,19 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
     private OmsOrderItemMapper orderItemMapper;
     @Autowired
     private CancelOrderSender cancelOrderSender;
+
+    @Override
+    public String generateOrderToken() {
+        // 每次调用生成全新的随机令牌，绑定到"本次结算意图"而非商品内容。
+        // 存入 Redis 并设置过期时间，下单时校验并删除（del 是原子操作）。
+        String token = UUID.randomUUID().toString().replace("-", "");
+        redisService.set(getOrderTokenKey(token), token, REDIS_EXPIRE_ORDER_TOKEN);
+        return token;
+    }
+
+    private String getOrderTokenKey(String token) {
+        return REDIS_DATABASE + ":" + REDIS_KEY_ORDER_TOKEN + ":" + token;
+    }
 
     @Override
     public ConfirmOrderResult generateConfirmOrder(List<Long> cartIds) {
@@ -94,6 +111,12 @@ public class OmsPortalOrderServiceImpl implements OmsPortalOrderService {
     @Override
     @Transactional
     public Map<String, Object> generateOrder(OrderParam orderParam) {
+        // 幂等校验：校验并删除令牌（del 是原子操作，返回 true 表示首次使用）。
+        // 重复请求带同一个 token 时 del 返回 false，直接拒绝，避免重复下单。
+        if (orderParam.getToken() == null
+                || !Boolean.TRUE.equals(redisService.del(getOrderTokenKey(orderParam.getToken())))) {
+            Asserts.fail("请勿重复提交订单！");
+        }
         List<OmsOrderItem> orderItemList = new ArrayList<>();
         //校验收货地址
         if(orderParam.getMemberReceiveAddressId()==null){

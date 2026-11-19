@@ -60,9 +60,11 @@ redis:
     authCode: 'ums:authCode'
     orderId: 'oms:orderId'
     member: 'ums:member'
+    orderToken: 'oms:orderToken' # 下单幂等令牌key前缀
   expire:
     authCode: 90 # 验证码超期时间
     common: 86400 # 24小时
+    orderToken: 300 # 下单幂等令牌超期时间(秒)，5分钟
 
 mongo:
   insert:

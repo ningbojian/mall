@@ -15,6 +15,11 @@ import java.util.Map;
  */
 public interface OmsPortalOrderService {
     /**
+     * 生成下单幂等令牌（用户点结算时领取，下单时携带）
+     */
+    String generateOrderToken();
+
+    /**
      * 根据用户购物车信息生成确认单信息
      */
     ConfirmOrderResult generateConfirmOrder(List<Long> cartIds);
