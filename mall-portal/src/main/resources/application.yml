@@ -6,6 +6,13 @@ spring:
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
+  # RabbitMQ 可靠性配置
+  rabbitmq:
+    publisher-confirm-type: correlated # 生产者确认：消息到交换机回调
+    publisher-returns: true # 消息无法投递到队列时退回生产者
+    listener:
+      simple:
+        acknowledge-mode: manual # 手动 ack：业务处理成功才确认
 
 mybatis:
   mapper-locations:
